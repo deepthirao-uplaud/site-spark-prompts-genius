@@ -1,18 +1,27 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
-import { useUserProfile } from '@/hooks/useUserProfile';
+import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+
+interface UserProfile {
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+}
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, signOut, loading: authLoading } = useAuth();
-  const { profile, loading: profileLoading } = useUserProfile();
+  const { user, logout, loading: authLoading } = useFirebaseAuth();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState(false);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -21,9 +30,54 @@ const Dashboard = () => {
     }
   }, [user, authLoading, navigate]);
 
+  // Fetch user profile from Firestore
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user) return;
+      
+      try {
+        setProfileLoading(true);
+        setProfileError(false);
+        
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setProfile({
+            fullName: userData.fullName || 'User',
+            email: userData.email || user.email || '',
+            phoneNumber: userData.phoneNumber || 'Not provided'
+          });
+        } else {
+          // Fallback to Firebase auth data if Firestore doc doesn't exist
+          setProfile({
+            fullName: user.displayName || 'User',
+            email: user.email || '',
+            phoneNumber: 'Not provided'
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+        setProfileError(true);
+        // Fallback to Firebase auth data on error
+        setProfile({
+          fullName: user.displayName || 'User',
+          email: user.email || '',
+          phoneNumber: 'Not provided'
+        });
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user]);
+
   const handleLogout = async () => {
     try {
-      await signOut();
+      await logout();
       toast({
         title: "Logged out successfully",
         description: "You have been logged out of your Uplaud account.",
@@ -48,12 +102,9 @@ const Dashboard = () => {
   }
 
   // Don't render anything if user is not authenticated (will redirect)
-  if (!user || !profile) {
+  if (!user) {
     return null;
   }
-
-  // Calculate some stats (placeholder for now)
-  const reviewsSubmitted = 0; // This would come from a reviews table in the future
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#6214a8] to-[#4c0e7a] px-4 py-8">
@@ -65,7 +116,7 @@ const Dashboard = () => {
               My Dashboard
             </h1>
             <p className="text-xl text-[#5EEAD4]">
-              Welcome back, {profile.full_name}!
+              Welcome back, {profile?.fullName || 'User'}!
             </p>
           </div>
           <Button
@@ -80,6 +131,21 @@ const Dashboard = () => {
 
         {/* Dashboard Content */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Profile Error Fallback */}
+          {profileError && (
+            <Card className="shadow-xl border-0 md:col-span-2 lg:col-span-3 bg-red-50 border-red-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-red-800 text-lg flex items-center gap-2">
+                  <AlertCircle size={20} />
+                  Profile Loading Issue
+                </CardTitle>
+                <CardDescription className="text-red-600">
+                  We're having trouble loading your profile data, but you're still logged in successfully.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+
           {/* Reviews Summary Card */}
           <Card className="shadow-xl border-0">
             <CardHeader className="pb-3">
@@ -92,7 +158,7 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-[#6214a8] mb-2">
-                {reviewsSubmitted}
+                0
               </div>
               <p className="text-sm text-slate-600">
                 Thank you for helping others make better decisions!
@@ -108,7 +174,7 @@ const Dashboard = () => {
                 Account Information
               </CardTitle>
               <CardDescription className="text-slate-600">
-                Your registered details
+                Your registered details {profileError && '(showing fallback data)'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -118,7 +184,7 @@ const Dashboard = () => {
                     Full Name
                   </label>
                   <p className="text-slate-900 bg-slate-50 p-3 rounded-md">
-                    {profile.full_name}
+                    {profile?.fullName || 'Loading...'}
                   </p>
                 </div>
                 <div>
@@ -126,7 +192,7 @@ const Dashboard = () => {
                     WhatsApp Phone Number
                   </label>
                   <p className="text-slate-900 bg-slate-50 p-3 rounded-md">
-                    {profile.phone_number}
+                    {profile?.phoneNumber || 'Loading...'}
                   </p>
                 </div>
               </div>
@@ -135,7 +201,7 @@ const Dashboard = () => {
                   Email Address
                 </label>
                 <p className="text-slate-900 bg-slate-50 p-3 rounded-md">
-                  {profile.email}
+                  {profile?.email || 'Loading...'}
                 </p>
               </div>
             </CardContent>
