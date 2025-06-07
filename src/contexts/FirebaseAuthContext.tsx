@@ -16,6 +16,7 @@ interface FirebaseAuthContextType {
   signup: (email: string, password: string, userData: { fullName: string; phoneNumber: string }) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  isFirebaseConfigured: boolean;
 }
 
 const FirebaseAuthContext = createContext<FirebaseAuthContextType | undefined>(undefined);
@@ -31,17 +32,27 @@ export const useFirebaseAuth = () => {
 export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const isFirebaseConfigured = auth !== null && db !== null;
 
   useEffect(() => {
+    if (!isFirebaseConfigured) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
     });
 
     return unsubscribe;
-  }, []);
+  }, [isFirebaseConfigured]);
 
   const signup = async (email: string, password: string, userData: { fullName: string; phoneNumber: string }) => {
+    if (!isFirebaseConfigured) {
+      throw new Error('Firebase is not configured. Please set up your Firebase credentials.');
+    }
+
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
     
@@ -55,10 +66,18 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const login = async (email: string, password: string) => {
+    if (!isFirebaseConfigured) {
+      throw new Error('Firebase is not configured. Please set up your Firebase credentials.');
+    }
+    
     await signInWithEmailAndPassword(auth, email, password);
   };
 
   const logout = async () => {
+    if (!isFirebaseConfigured) {
+      throw new Error('Firebase is not configured. Please set up your Firebase credentials.');
+    }
+    
     await signOut(auth);
   };
 
@@ -67,7 +86,8 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     loading,
     signup,
     login,
-    logout
+    logout,
+    isFirebaseConfigured
   };
 
   return (
