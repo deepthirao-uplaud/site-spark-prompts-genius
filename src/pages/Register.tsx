@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
+import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -19,7 +18,7 @@ const Register = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { signUp } = useAuth();
+  const { signup } = useFirebaseAuth();
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -60,23 +59,22 @@ const Register = () => {
     setIsLoading(true);
     
     try {
-      const { error } = await signUp(formData.email, formData.password, formData.fullName, formData.phoneNumber);
+      await signup(formData.email, formData.password, {
+        fullName: formData.fullName,
+        phoneNumber: formData.phoneNumber
+      });
       
-      if (error) {
-        if (error.message.includes('User already registered')) {
-          setErrors({ email: 'User with this email already exists' });
-        } else {
-          setErrors({ submit: error.message });
-        }
+      toast({
+        title: "Registration Successful!",
+        description: "Your account has been created successfully.",
+      });
+      navigate('/dashboard');
+    } catch (error: any) {
+      if (error.code === 'auth/email-already-in-use') {
+        setErrors({ email: 'User with this email already exists' });
       } else {
-        toast({
-          title: "Registration Successful!",
-          description: "Please check your email to confirm your account, then you can login.",
-        });
-        navigate('/login');
+        setErrors({ submit: error.message || 'An error occurred during registration' });
       }
-    } catch (error) {
-      setErrors({ submit: 'An unexpected error occurred' });
     } finally {
       setIsLoading(false);
     }

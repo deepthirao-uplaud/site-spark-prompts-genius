@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
+import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -17,7 +17,7 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { signIn, user } = useAuth();
+  const { login, user } = useFirebaseAuth();
 
   // Redirect if already logged in
   useEffect(() => {
@@ -56,23 +56,18 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      const { error } = await signIn(formData.email, formData.password);
-      
-      if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          setErrors({ submit: 'Invalid email or password' });
-        } else {
-          setErrors({ submit: error.message });
-        }
+      await login(formData.email, formData.password);
+      toast({
+        title: "Login Successful!",
+        description: "Welcome back to Uplaud.",
+      });
+      navigate('/dashboard');
+    } catch (error: any) {
+      if (error.code === 'auth/invalid-credential') {
+        setErrors({ submit: 'Invalid email or password' });
       } else {
-        toast({
-          title: "Login Successful!",
-          description: "Welcome back to Uplaud.",
-        });
-        navigate('/dashboard');
+        setErrors({ submit: error.message || 'An error occurred during login' });
       }
-    } catch (error) {
-      setErrors({ submit: 'An unexpected error occurred' });
     } finally {
       setIsLoading(false);
     }
